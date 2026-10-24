@@ -5,8 +5,7 @@
 #  只有 3 个敏感项走 Secrets：
 #     SMTP_USERNAME  你的邮箱
 #     SMTP_PASSWORD  授权码
-#     SMTP_TO        收件邮箱（多个用逗号）
-#  其余（服务器/端口/加密方式）不敏感，直接写在这里。
+#     SMTP_TO        收件邮箱
 # ============================================================
 
 [app]
@@ -17,8 +16,7 @@ log_level = "INFO"
 proxy = ""               # Actions 跑在海外，不需要代理
 timeout = 20
 retries = 2
-# 网页通道返回的 HTML 里没有商品（前端异步加载），直接走接口
-fetch_mode = "api"
+fetch_mode = "api"       # 煤炉的网页通道是空壳，直接走接口
 status_poll_batch = 20
 status_poll_interval = 900
 
@@ -27,9 +25,9 @@ subject_prefix = "[煤炉监控]"
 
 [notify.email]
 enabled = true
-host = "smtp.126.com"    # ← 126/163 都用网易的 SMTP
+host = "smtp.126.com"
 port = 465
-security = "ssl"         # 465 配 ssl；587 配 starttls
+security = "ssl"
 username = ""            # ← 由 Secrets 注入
 password = ""            # ← 由 Secrets 注入
 from_addr = ""           # 留空则用 username
@@ -51,10 +49,11 @@ status_change = false
 alert_on_first_run = false
 
 # ============================================================
-#  L1 #1
+#  煤炉
 # ============================================================
 [[watch]]
 name = "L1-ガレージキット"
+site = "mercari"
 mode = "new"
 keyword = "ロックマン　ガレージキット"
 interval = 300
@@ -69,16 +68,49 @@ new_item = true
 price_drop = false
 status_change = false
 
-# ============================================================
-#  L1 #2
-# ============================================================
 [[watch]]
 name = "L1-レジンキット"
+site = "mercari"
 mode = "new"
 keyword = "ロックマン　レジンキット"
 interval = 300
 pages = 2
 sort = "created_time"
+
+[watch.filters]
+price_min = 2000
+
+[watch.rules]
+new_item = true
+price_drop = false
+status_change = false
+
+# ============================================================
+#  雅虎日拍（ヤフオク）
+# ============================================================
+[[watch]]
+name = "日拍-ガレージキット"
+site = "yahoo"
+mode = "new"
+keyword = "ロックマン　ガレージキット"
+interval = 300
+pages = 1
+
+[watch.filters]
+price_min = 2000
+
+[watch.rules]
+new_item = true
+price_drop = false
+status_change = false
+
+[[watch]]
+name = "日拍-レジンキット"
+site = "yahoo"
+mode = "new"
+keyword = "ロックマン　レジンキット"
+interval = 300
+pages = 1
 
 [watch.filters]
 price_min = 2000

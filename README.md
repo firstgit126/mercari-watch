@@ -165,6 +165,7 @@ status_change = true              # 售出 / 下架也报
 
 | 字段 | 作用 |
 | --- | --- |
+| `site` | `mercari` = 煤炉（默认）；`yahoo` = 雅虎日拍（ヤフオク） |
 | `mode` | `new` = L1 找新货；`price` = L2 盯一件 |
 | `new_item` | 新上架要不要报 |
 | `price_drop` | 降价要不要报 |
@@ -243,19 +244,19 @@ python -m mercari_watch status    看每个关键字的进度和最近事件
 
 ## 4. 抓取是怎么做的（以及为什么可能失效）
 
-Mercari 没有公开 API，程序走两条通道，`fetch_mode = "auto"` 时自动择优：
+Mercari 没有公开 API。程序里有两条通道，实测结论是：**只有接口通道有数据**。
 
-1. **网页通道**（默认首选）：请求 `jp.mercari.com/search`，从页面内嵌的 JSON / RSC 数据流里解析商品。不需要签名，最不容易被拦。
-2. **接口通道**：POST `api.mercari.jp/v2/entities:search`，需要 DPoP 签名。签名用纯 Python 实现的 P-256 ECDSA（`mercari_watch/crypto.py`），不依赖 `cryptography`。
+1. **接口通道（实际使用的）**：POST `api.mercari.jp/v2/entities:search`，需要 DPoP 签名。
+   签名用纯 Python 实现的 P-256 ECDSA（`mercari_watch/crypto.py`），不依赖 `cryptography`。
+   注意 JWS 的 ES256 要求签名是 **64 字节的 `R||S` 拼接**，不是 DER——送 DER 会被判 `invalid token`。
+2. **网页通道（备用）**：请求 `jp.mercari.com/search`。实测拿到的 HTML 有 550 KB，
+   但里面 `"price"` 出现 0 次——**搜索结果是前端异步加载的，服务端渲染的页面不含商品**。
+   所以 `fetch_mode = "api"` 是常态；`auto` 模式下网页通道返回 0 条也会自动回落到接口。
 
 **要注意的现实：**
 
-- 网页和接口结构都可能改。真改了，`doctor` 会显示「页面拿到了，但一个商品都没解析出来」。
-  这时加 `--dump` 存下原始页面，`data\dumps\` 里就是现场，改 `fetcher.py` 里的解析规则即可。
-- 也可以离线验证解析器：
-  ```bat
-  python -m mercari_watch parse data\dumps\doctor_xxxx.html
-  ```
+- 接口结构可能改。真改了，日志里会是 `HTTP 4xx` 或 `0 条`，
+  这时候跑 `doctor` 看具体报什么，把 `data\watch.log` 留好。
 - 请求别太猛。`interval` 最小 30 秒，`pages` 别超过 2-3，否则容易触发风控（返回 429 或空列表）。
 - 这是**非官方**手段，Mercari 有权随时调整。程序做了重试和退避，但没法保证永久可用。
 - 本工具只读公开的在售列表，不登录、不抢购、不自动下单。

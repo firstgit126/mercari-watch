@@ -55,6 +55,7 @@ class HttpClient:
         timeout: int = 20,
         retries: int = 2,
         user_agent: str = "Mozilla/5.0",
+        ca_bundle: str = "",
     ) -> None:
         self.timeout = timeout
         self.retries = max(0, retries)
@@ -67,6 +68,17 @@ class HttpClient:
         else:
             handlers.append(urllib.request.ProxyHandler({}))
         context = ssl.create_default_context()
+        # 某些系统镜像的根证书被裁剪（比如只剩 33 个），这时雅虎、亚马逊等会报
+        # "unable to get local issuer certificate"。指定一份完整 CA bundle 即可。
+        if ca_bundle:
+            from pathlib import Path
+
+            bundle = Path(ca_bundle)
+            if bundle.is_file():
+                context.load_verify_locations(cafile=str(bundle))
+                log.info("已加载额外 CA 证书：%s", bundle)
+            else:
+                log.warning("ca_bundle 配置的文件不存在：%s", bundle)
         handlers.append(urllib.request.HTTPSHandler(context=context))
         self._opener = urllib.request.build_opener(*handlers)
 

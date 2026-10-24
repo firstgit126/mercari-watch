@@ -27,6 +27,7 @@ from .models import STATUS_LABEL
 from .notify import EmailNotifier
 from .runner import Runner
 from .store import Store
+from .yahoo import YahooClient
 
 DEFAULT_CONFIG = "config.toml"
 
@@ -47,9 +48,12 @@ def _build(path: Path, proxy: str | None = None):
     cfg = _apply_proxy(load_config(path), proxy)
     setup_logging(cfg.log_level, cfg.log_path)
     store = Store(cfg.db_path)
-    client = MercariClient(cfg.network, cfg.data_dir)
+    clients = {
+        "mercari": MercariClient(cfg.network, cfg.data_dir),
+        "yahoo": YahooClient(cfg.network, cfg.data_dir),
+    }
     notifier = EmailNotifier(cfg.email)
-    return cfg, store, client, notifier, Runner(cfg, store, client, notifier)
+    return cfg, store, clients, notifier, Runner(cfg, store, clients, notifier)
 
 
 def _apply_proxy(cfg: Config, proxy: str | None) -> Config:

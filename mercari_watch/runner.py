@@ -14,7 +14,6 @@ import time
 from dataclasses import dataclass
 
 from .config import Config, Watch
-from .fetcher import MercariClient
 from .models import (
     STATUS_REMOVED,
     STATUS_SOLD,
@@ -45,11 +44,17 @@ class CycleReport:
 
 
 class Runner:
-    def __init__(self, cfg: Config, store: Store, client: MercariClient, notifier: EmailNotifier):
+    def __init__(self, cfg: Config, store: Store, clients: dict, notifier: EmailNotifier):
         self.cfg = cfg
         self.store = store
-        self.client = client
+        self.clients = clients
         self.notifier = notifier
+
+    def _client(self, watch: Watch):
+        client = self.clients.get(watch.site)
+        if client is None:
+            raise RuntimeError(f"没有为 site={watch.site} 准备抓取客户端")
+        return client
 
     # -- 分发 --------------------------------------------------------------
     def poll_watch(self, watch: Watch) -> CycleReport:
@@ -81,7 +86,7 @@ class Runner:
         last_count = 0
         pages_fetched = 0
         for page in range(pages):
-            result = self.client.search(watch, token)
+            result = self._client(watch).search(watch, token)
             items.extend(result.items)
             last_count = len(result.items)
             pages_fetched += 1
@@ -148,7 +153,7 @@ class Runner:
                 continue  # 已经确认没了，别再浪费请求
 
             try:
-                latest = self.client.fetch_item(item_id)
+                latest = self._client(watch).fetch_item(item_id)
             except Exception as exc:  # noqa: BLE001
                 log.warning("[%s] 查询 %s 失败：%s", watch.name, item_id, exc)
                 continue
@@ -186,7 +191,7 @@ class Runner:
 
     def _lock_target(self, watch: Watch) -> list[Event]:
         """搜索并锁定第一件符合条件的商品。"""
-        result = self.client.search(watch, "")
+        result = self._client(watch).search(watch, "")
         candidates = [i for i in result.items if watch.filters.matches(i.name, i.price)]
         if not candidates:
             log.warning(
@@ -216,7 +221,7 @@ class Runner:
         for row in due:
             item_id = row["item_id"]
             try:
-                latest = self.client.fetch_item(item_id)
+                latest = self._client(watch).fetch_item(item_id)
             except Exception as exc:  # noqa: BLE001
                 log.warning("[%s] 查询商品 %s 状态失败：%s", watch.name, item_id, exc)
                 continue

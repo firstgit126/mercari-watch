@@ -58,6 +58,8 @@ class Rules:
 class Watch:
     name: str
     keyword: str
+    # mercari = 煤炉；yahoo = 雅虎日拍（ヤフオク）
+    site: str = "mercari"
     # new   = L1：每轮搜索，发现新商品就报
     # price = L2：先搜索锁定一件（item_id），之后只盯这一件的价格和状态
     mode: str = "new"
@@ -79,6 +81,7 @@ class Network:
         "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     )
     fetch_mode: str = "auto"       # auto | html | api
+    ca_bundle: str = ""            # 额外的 CA 证书文件，补系统信任库的缺口
     dump_html: bool = False        # 调试用：保存原始页面
     status_poll_batch: int = 20    # 每轮检查多少个在售商品的状态
     status_poll_interval: int = 900  # 同一商品多久复查一次状态（秒）
@@ -321,12 +324,18 @@ def load_config(path: str | Path) -> Config:
     log_level = _as_str(app_raw.get("log_level", "INFO"), "app.log_level").upper()
 
     net_raw = raw.get("network", {}) or {}
+    ca_bundle_raw = _as_str(net_raw.get("ca_bundle", "") or "", "network.ca_bundle").strip()
+    ca_bundle = ""
+    if ca_bundle_raw:
+        candidate = Path(ca_bundle_raw)
+        ca_bundle = str(candidate if candidate.is_absolute() else (app_dir / candidate))
     network = Network(
         proxy=_as_str(net_raw.get("proxy", "") or "", "network.proxy"),
         timeout=_as_int(net_raw.get("timeout", 20), "network.timeout"),
         retries=_as_int(net_raw.get("retries", 2), "network.retries"),
         user_agent=_as_str(net_raw.get("user_agent", Network.user_agent), "network.user_agent"),
         fetch_mode=_as_str(net_raw.get("fetch_mode", "auto"), "network.fetch_mode").lower(),
+        ca_bundle=ca_bundle,
         dump_html=_as_bool(net_raw.get("dump_html", False), "network.dump_html"),
         status_poll_batch=_as_int(net_raw.get("status_poll_batch", 20), "network.status_poll_batch"),
         status_poll_interval=_as_int(
@@ -398,10 +407,14 @@ def load_config(path: str | Path) -> Config:
             raise ConfigError(f"{name}：mode 只能是 new（L1 找新货）或 price（L2 盯价格）")
         if mode == "price" and pages < 1:
             raise ConfigError(f"{name}：mode=price 至少要 1 页用来锁定商品")
+        site = _as_str(item.get("site", "mercari"), f"watch[{idx}].site").lower()
+        if site not in {"mercari", "yahoo"}:
+            raise ConfigError(f"{name}：site 只能是 mercari（煤炉）或 yahoo（雅虎日拍）")
         watches.append(
             Watch(
                 name=name,
                 keyword=keyword,
+                site=site,
                 mode=mode,
                 interval=interval,
                 pages=pages,

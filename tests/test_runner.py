@@ -112,7 +112,8 @@ class RunnerTestCase(unittest.TestCase):
 
     def build(self, watch: Watch, client: FakeClient) -> Runner:
         cfg = make_config(self.tmp, [watch])
-        return Runner(cfg, self.store, client, EmailNotifier(cfg.email))
+        clients = {"mercari": client, "yahoo": client}
+        return Runner(cfg, self.store, clients, EmailNotifier(cfg.email))
 
     def kinds(self) -> list[str]:
         return [row["kind"] for row in reversed(self.store.recent_events(200))]
@@ -292,7 +293,7 @@ class DedupeTests(RunnerTestCase):
             def send_events(self, events):
                 sent.extend(events)
 
-        runner = Runner(cfg, self.store, client, CapturingNotifier())
+        runner = Runner(cfg, self.store, {"mercari": client, "yahoo": client}, CapturingNotifier())
         runner.run_once()  # 两个监控项各自建基线
 
         client.search_items.append(make_item("m2"))

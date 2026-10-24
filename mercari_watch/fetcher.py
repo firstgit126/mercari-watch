@@ -333,6 +333,7 @@ class MercariClient:
             timeout=network.timeout,
             retries=network.retries,
             user_agent=network.user_agent,
+            ca_bundle=network.ca_bundle,
         )
         self._key: int | None = None
         self.mode = network.fetch_mode
