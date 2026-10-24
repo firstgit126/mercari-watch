@@ -7,9 +7,9 @@ import logging
 import smtplib
 import ssl
 import time
-from email.header import Header
+from email.headerregistry import Address
 from email.message import EmailMessage
-from email.utils import formataddr, formatdate
+from email.utils import formatdate
 
 from .config import Email
 from .models import Event
@@ -130,8 +130,9 @@ class EmailNotifier:
     def _send(self, subject: str, text: str, html_body: str) -> None:
         cfg = self.cfg
         msg = EmailMessage()
-        msg["Subject"] = Header(subject, "utf-8")
-        msg["From"] = formataddr((str(Header("煤炉监控", "utf-8")), cfg.from_addr))
+        # 新版 EmailMessage 只接受字符串 / Address，不能塞 Header 对象
+        msg["Subject"] = subject
+        msg["From"] = Address(display_name="煤炉监控", addr_spec=cfg.from_addr)
         msg["To"] = ", ".join(cfg.to_addrs)
         msg["Date"] = formatdate(localtime=True)
         msg.set_content(text, charset="utf-8")
