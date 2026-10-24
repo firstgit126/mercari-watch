@@ -27,7 +27,7 @@ subject_prefix = "[煤炉监控]"
 
 [notify.email]
 enabled = true
-host = "smtp.qq.com"     # ← 按你的邮箱改
+host = "smtp.126.com"    # ← 126/163 都用网易的 SMTP
 port = 465
 security = "ssl"         # 465 配 ssl；587 配 starttls
 username = ""            # ← 由 Secrets 注入
