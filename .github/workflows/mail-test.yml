@@ -1,0 +1,29 @@
+name: mail-test
+
+# 只用来验证一件事：GitHub 的机器能不能通过 126/QQ 的 SMTP 发出邮件。
+# 因为是海外 IP，网易可能判定异地登录并拒绝；先单独测一次，免得真上新时静默失败。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 发一封测试邮件
+        env:
+          MERCARI_WATCH_SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          MERCARI_WATCH_SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MERCARI_WATCH_SMTP_TO: ${{ secrets.SMTP_TO }}
+        run: python -m mercari_watch mail-test -c config.ci.toml
