@@ -1,0 +1,88 @@
+# ============================================================
+#  GitHub Actions 专用配置
+#
+#  这个文件会提交到公开仓库，所以【不能写邮箱地址和授权码】。
+#  只有 3 个敏感项走 Secrets：
+#     SMTP_USERNAME  你的邮箱
+#     SMTP_PASSWORD  授权码
+#     SMTP_TO        收件邮箱（多个用逗号）
+#  其余（服务器/端口/加密方式）不敏感，直接写在这里。
+# ============================================================
+
+[app]
+data_dir = "data"
+log_level = "INFO"
+
+[network]
+proxy = ""               # Actions 跑在海外，不需要代理
+timeout = 20
+retries = 2
+fetch_mode = "auto"
+status_poll_batch = 20
+status_poll_interval = 900
+
+[notify]
+subject_prefix = "[煤炉监控]"
+
+[notify.email]
+enabled = true
+host = "smtp.qq.com"     # ← 按你的邮箱改
+port = 465
+security = "ssl"         # 465 配 ssl；587 配 starttls
+username = ""            # ← 由 Secrets 注入
+password = ""            # ← 由 Secrets 注入
+from_addr = ""           # 留空则用 username
+to_addrs = []            # ← 由 Secrets 注入
+
+[defaults.filters]
+price_min = 0
+price_max = 0
+exclude_keywords = []
+
+[defaults.rules]
+new_item = true
+price_drop = false
+price_increase = false
+price_drop_percent = 0
+price_drop_absolute = 0
+below_price = 0
+status_change = false
+alert_on_first_run = false
+
+# ============================================================
+#  L1 #1
+# ============================================================
+[[watch]]
+name = "L1-ガレージキット"
+mode = "new"
+keyword = "ロックマン　ガレージキット"
+interval = 300
+pages = 2
+sort = "created_time"
+
+[watch.filters]
+price_min = 2000
+
+[watch.rules]
+new_item = true
+price_drop = false
+status_change = false
+
+# ============================================================
+#  L1 #2
+# ============================================================
+[[watch]]
+name = "L1-レジンキット"
+mode = "new"
+keyword = "ロックマン　レジンキット"
+interval = 300
+pages = 2
+sort = "created_time"
+
+[watch.filters]
+price_min = 2000
+
+[watch.rules]
+new_item = true
+price_drop = false
+status_change = false

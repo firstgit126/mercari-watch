@@ -1,0 +1,7 @@
+data/
+config.toml
+__pycache__/
+*.pyc
+tests/_tmp/
+tests/_tmp_probe/
+*.log

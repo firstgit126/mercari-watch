@@ -1,0 +1,13 @@
+# 统一换行符，避免 Windows/Mac/Linux 之间来回改动文件
+* text=auto
+
+# .bat 在 Windows 上必须是 CRLF，否则 cmd 解析会出错
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 其余脚本和配置保持 LF
+*.py text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

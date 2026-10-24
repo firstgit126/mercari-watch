@@ -1,0 +1,116 @@
+# ============================================================
+#  mercari-watch 配置
+#  改完保存，先跑：python -m mercari_watch doctor
+#
+#  两类监控项：
+#    mode = "new"    → L1：搜关键字，发现新商品就报
+#    mode = "price"  → L2：搜关键字锁定一件，之后只盯这件的价格/状态
+# ============================================================
+
+[app]
+data_dir = "data"        # 数据库、日志、DPoP 密钥都放这里
+log_level = "INFO"       # DEBUG / INFO / WARNING
+
+[network]
+# 国内直连不了煤炉（DNS 污染 + IP 层拦截），必须有一个海外出口。
+# 本机代理软件：  "http://127.0.0.1:7890"（Clash）/ "http://127.0.0.1:10809"（v2rayN）
+# 付费 HTTP 代理： "http://用户名:密码@gate.xxx.com:12345"（优先日本节点）
+# 拿到地址先验证，别直接付款：
+#   python -m mercari_watch proxy-test --proxy "http://用户名:密码@gate.xxx.com:12345"
+# 留空 = 直连（只在海外网络或已全局代理时才有意义）。
+proxy = ""
+
+timeout = 20             # 单次请求超时（秒）
+retries = 2              # 失败重试次数
+
+# auto = 先试网页再试接口；html = 只用网页；api = 只用接口
+fetch_mode = "auto"
+
+dump_html = false        # 排错时改 true，会把原始页面存到 data/dumps/
+
+status_poll_batch = 20   # 每轮复查多少个在售商品的状态
+status_poll_interval = 900  # 同一商品多久复查一次状态（秒）
+
+# ------------------------------------------------------------
+[notify]
+subject_prefix = "[煤炉监控]"
+
+[notify.email]
+enabled = true
+host = "smtp.qq.com"     # QQ smtp.qq.com / 163 smtp.163.com / Gmail smtp.gmail.com
+port = 465
+security = "ssl"         # ssl(465) / starttls(587) / plain(25)
+username = "your@qq.com"
+password = "这里填邮箱授权码，不是登录密码"   # 也可用环境变量 MERCARI_WATCH_SMTP_PASSWORD
+from_addr = "your@qq.com"
+to_addrs = ["your@qq.com"]
+
+# ------------------------------------------------------------
+# [defaults] 是「所有监控项共用」的默认值，每个 [[watch]] 只写自己要改的。
+[defaults.filters]
+price_min = 0
+price_max = 0
+exclude_keywords = ["ジャンク", "訳あり"]
+require_keywords = []
+
+[defaults.rules]
+new_item = true
+price_drop = true
+price_increase = false
+price_drop_percent = 5     # 降幅 ≥5% 才报；设 0 表示任意降价都报
+price_drop_absolute = 0    # 或降价金额 ≥ 该值
+below_price = 0
+status_change = true
+alert_on_first_run = false
+
+# ============================================================
+#  L1：找新货
+#  「有新增就报」——已见过的 ID 不再重复提醒
+# ============================================================
+[[watch]]
+name = "Switch OLED 新货"
+mode = "new"
+keyword = "Nintendo Switch 有機EL"
+interval = 300           # 5 分钟
+pages = 2                # 结果 50 条以内建议 2（一页约 30 条）
+sort = "created_time"    # 按发布时间从新到旧
+enabled = true
+
+[watch.filters]
+price_min = 15000
+price_max = 40000
+exclude_keywords = ["ジャンク", "訳あり", "本体のみ", "ドックなし"]
+
+[watch.rules]
+new_item = true
+price_drop = false       # L1 只看新货
+price_increase = false
+below_price = 0
+status_change = false    # 不复查状态，省请求
+
+# ============================================================
+#  L2：盯一件商品的价格
+#  首次运行会搜索并锁定「第一条符合条件」的商品，然后一直盯它。
+#  锁错了？改 keyword，或者跑：python -m mercari_watch relock "监控项名字"
+# ============================================================
+[[watch]]
+name = "盯这台 Switch"
+mode = "price"
+keyword = "Nintendo Switch 有機EL ホワイト"
+interval = 300
+pages = 1
+sort = "created_time"
+enabled = true
+
+[watch.filters]
+# 锁定时的筛选：命中第一条就锁。想锁得准，关键字写全一点。
+exclude_keywords = ["ジャンク", "訳あり"]
+
+[watch.rules]
+new_item = false
+price_drop = true
+price_increase = true      # 涨跌都报
+price_drop_percent = 0     # 0 = 任意降价都报
+price_drop_absolute = 0
+below_price = 26000        # 跌破这个价单独报一次
+status_change = true       # 售出 / 下架也报

@@ -1,0 +1,50 @@
+name: mercari-watch
+
+# 每 5 分钟跑一轮。GitHub 的定时任务在高负载时会延迟，
+# 实际触发间隔通常是 5-15 分钟，这是免费方案的固有代价。
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: # 也可以手动点一下立即跑
+
+permissions:
+  contents: read
+
+# 同一时间只跑一轮，避免两轮抢同一个状态库
+concurrency:
+  group: mercari-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 状态库（见过的商品、价格、发过的事件）在两次运行之间靠缓存传递。
+      # 每次运行都会保存一份新缓存，恢复时取最新的那份。
+      - name: 恢复状态
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: mercari-state-${{ github.run_id }}
+          restore-keys: |
+            mercari-state-
+
+      - name: 跑一轮
+        env:
+          MERCARI_WATCH_SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          MERCARI_WATCH_SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MERCARI_WATCH_SMTP_TO: ${{ secrets.SMTP_TO }}
+        run: python -m mercari_watch once -c config.ci.toml
+
+      - name: 出错时打印日志尾部
+        if: failure()
+        run: tail -n 40 data/watch.log || true
