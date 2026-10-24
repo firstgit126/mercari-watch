@@ -17,7 +17,8 @@ log_level = "INFO"
 proxy = ""               # Actions 跑在海外，不需要代理
 timeout = 20
 retries = 2
-fetch_mode = "auto"
+# 网页通道返回的 HTML 里没有商品（前端异步加载），直接走接口
+fetch_mode = "api"
 status_poll_batch = 20
 status_poll_interval = 900
 

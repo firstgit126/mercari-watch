@@ -1,3 +1,4 @@
+import base64
 import unittest
 
 from mercari_watch import crypto
@@ -28,6 +29,14 @@ class CryptoTests(unittest.TestCase):
         left = (y * y) % crypto.P
         right = (x * x * x + crypto.A * x + crypto.B) % crypto.P
         self.assertEqual(left, right)
+
+    def test_dpop_signature_is_raw_not_der(self):
+        """JWS 的 ES256 用 64 字节 R||S，不是 DER；送 DER 会被服务端判 invalid token。"""
+        priv = crypto.new_private_key()
+        token = crypto.make_dpop(priv, "https://api.mercari.jp/v2/entities:search", "POST")
+        sig = token.split(".")[2]
+        raw = base64.urlsafe_b64decode(sig + "=" * (-len(sig) % 4))
+        self.assertEqual(len(raw), 64)
 
     def test_dpop_token_shape(self):
         priv = crypto.new_private_key()

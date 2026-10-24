@@ -145,6 +145,15 @@ def verify_es256(pub: Point, message: bytes, signature: bytes) -> bool:
     return point[0] % N == r
 
 
+def _der_to_raw(der: bytes) -> bytes:
+    """DER (r, s) -> JWS 要求的 64 字节 R||S 原始格式。
+
+    JWS 的 ES256 用的是定长拼接，不是 DER；直接送 DER 会被判 invalid token。
+    """
+    r, s = _der_decode_signature(der)
+    return r.to_bytes(32, "big") + s.to_bytes(32, "big")
+
+
 # ---- 密钥与 JWK ------------------------------------------------------------
 def new_private_key() -> int:
     while True:
@@ -200,7 +209,7 @@ def make_dpop(priv: int, url: str, method: str = "POST", nonce: str | None = Non
         claims["nonce"] = nonce
     signing_input = f"{_jwt_segment(header)}.{_jwt_segment(claims)}"
     signature = sign_es256(priv, signing_input.encode("ascii"))
-    return f"{signing_input}.{_b64u(signature)}"
+    return f"{signing_input}.{_b64u(_der_to_raw(signature))}"
 
 
 # ---- 自检 ------------------------------------------------------------------

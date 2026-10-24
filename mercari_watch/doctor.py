@@ -131,11 +131,12 @@ def run_doctor(
         if ips:
             _tls_check("jp.mercari.com", report)
 
-    # 4) 网页搜索通道
-    print("\n[4/6] 搜索页抓取与解析")
+    # 4) 搜索通道
+    print("\n[4/6] 搜索通道与解析")
     client = MercariClient(cfg.network, cfg.data_dir)
     target_keyword = keyword or cfg.watches[0].keyword
     report.info(f"测试关键字：{target_keyword}")
+    items: list = []
     started = time.time()
     try:
         fake_watch = cfg.watches[0]
@@ -143,39 +144,24 @@ def run_doctor(
             from dataclasses import replace
 
             fake_watch = replace(fake_watch, keyword=keyword, name=f"doctor:{keyword}")
-        params = urllib.parse.urlencode(
-            {"keyword": target_keyword, "status": "on_sale", "sort": "created_time", "order": "desc"}
-        )
-        url = f"{SEARCH_WEB}?{params}"
-        resp = client.http.request("GET", url, headers={"Referer": "https://jp.mercari.com/"})
+        result = client.search(fake_watch)
         elapsed = time.time() - started
-        report.ok(f"HTTP {resp.status}，{len(resp.body)} 字节，{elapsed:.1f}s")
-        if dump:
-            dump_dir = cfg.data_dir / "dumps"
-            dump_dir.mkdir(parents=True, exist_ok=True)
-            dump_path = dump_dir / f"doctor_{int(time.time())}.html"
-            dump_path.write_text(resp.text, "utf-8", errors="replace")
-            report.info(f"原始页面已保存：{dump_path}")
-        items = parse_items_from_html(resp.text)
-        if items:
-            report.ok(f"解析出 {len(items)} 个商品")
-            for item in items[:3]:
+        items = result.items
+        report.ok(f"通道 {result.mode}，{result.raw_len} 字节，{elapsed:.1f}s")
+        if result.items:
+            report.ok(f"拿到 {len(result.items)} 个商品，按发布时间从新到旧")
+            for item in result.items[:3]:
                 price = f"¥{item.price:,}" if item.price else "价格未知"
                 report.info(f"{item.id}  {price}  {item.name[:38]}")
         else:
             report.fail(
-                "页面拿到了，但一个商品都没解析出来",
-                "多半是页面结构变了。请用 `python -m mercari_watch doctor --dump` 保存原始 HTML，把文件发给开发者适配解析规则。",
+                "两个通道都返回 0 个商品",
+                "先用一个确定有货的关键字（比如 ポケモンカード）复测；仍然为 0 就是接口变了，把 data/watch.log 发我。",
             )
-            dump_dir = cfg.data_dir / "dumps"
-            dump_dir.mkdir(parents=True, exist_ok=True)
-            path = dump_dir / f"doctor_{int(time.time())}.html"
-            path.write_text(resp.text, "utf-8", errors="replace")
-            report.info(f"原始页面已保存：{path}")
     except Exception as exc:  # noqa: BLE001
         report.fail(
-            f"搜索页请求失败：{type(exc).__name__}: {exc}",
-            "如果是超时/连接被重置，基本可以确定需要代理；配好代理后重新运行 doctor。",
+            f"搜索失败：{type(exc).__name__}: {exc}",
+            "如果是超时/连接被重置，说明代理没生效或线路不通；先跑 proxy-test 确认代理。",
         )
         items = []
 

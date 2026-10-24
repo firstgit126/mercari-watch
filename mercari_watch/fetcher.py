@@ -382,15 +382,33 @@ class MercariClient:
         return unique
 
     def search(self, watch: Watch, page_token: str = "") -> SearchResult:
+        modes = self._mode_order()
         last_error: Exception | None = None
-        for mode in self._mode_order():
+        last_empty: SearchResult | None = None
+
+        for mode in modes:
             try:
                 if mode == "api":
-                    return self._search_api(watch, page_token)
-                return self._search_html(watch, page_token)
+                    result = self._search_api(watch, page_token)
+                else:
+                    result = self._search_html(watch, page_token)
             except Exception as exc:  # noqa: BLE001
                 log.warning("搜索通道 %s 失败（%s）：%s", mode, watch.name, exc)
                 last_error = exc
+                continue
+
+            # 网页通道拿到 HTML 不代表拿到商品：煤炉的搜索结果是客户端异步拉取的，
+            # 服务端渲染的 HTML 里一个商品都没有。所以"0 条"要当成失效信号，继续试下一个通道。
+            if not result.items and len(modes) > 1:
+                log.warning("通道 %s 返回 0 条（%s），换下一个通道", mode, watch.name)
+                last_empty = result
+                continue
+
+            self._learned_mode = mode
+            return result
+
+        if last_empty is not None:
+            return last_empty
         raise HttpError(f"所有搜索通道都失败：{last_error}") from last_error
 
     def _search_html(self, watch: Watch, page_token: str) -> SearchResult:
@@ -421,8 +439,7 @@ class MercariClient:
         items = parse_items_from_html(html)
         token = parse_next_token_from_html(html) if page_token == "" else ""
         if not items:
-            log.warning("搜索页没有解析出商品（%d 字节），稍后用 doctor --dump 复查", len(html))
-        self._learned_mode = "html"
+            log.warning("搜索页没有解析出商品（%d 字节），煤炉的搜索结果由前端异步加载，属正常", len(html))
         return SearchResult(items=items, next_token=token, mode="html", raw_len=len(html))
 
     def _search_api(self, watch: Watch, page_token: str) -> SearchResult:
@@ -471,7 +488,6 @@ class MercariClient:
             raise HttpError(f"接口返回不是 JSON：{resp.text[:200]!r}") from exc
         items = [it for it in (normalize_item(raw) for raw in data.get("items", [])) if it]
         token = (data.get("meta") or {}).get("nextPageToken", "") or ""
-        self._learned_mode = "api"
         return SearchResult(items=items, next_token=token, mode="api", raw_len=len(resp.body))
 
     # -- 单个商品 ----------------------------------------------------------
