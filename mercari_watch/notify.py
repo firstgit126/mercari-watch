@@ -9,7 +9,7 @@ import ssl
 import time
 from email.headerregistry import Address
 from email.message import EmailMessage
-from email.utils import formatdate
+from email.utils import formatdate, make_msgid
 
 from .config import Email
 from .models import Event
@@ -48,7 +48,7 @@ def render_html(events: list[Event], prefix: str) -> str:
     {html.escape(ev.title or ev.item_id)}
   </a>
   <div style="color:#57606a;font-size:12px;margin-top:4px;">
-    {html.escape(ev.detail)} ｜ 关键字：{html.escape(ev.watch)} ｜ ID：{ev.item_id}
+    {html.escape(ev.detail)} ｜ 监控项：{html.escape(ev.watch)} ｜ ID：{ev.item_id}
   </div>
 </td>
 <td style="padding:10px 12px;border-bottom:1px solid #eaeef2;text-align:right;
@@ -135,24 +135,37 @@ class EmailNotifier:
         msg["From"] = Address(display_name="煤炉监控", addr_spec=cfg.from_addr)
         msg["To"] = ", ".join(cfg.to_addrs)
         msg["Date"] = formatdate(localtime=True)
+        # 给邮件一个唯一 ID：万一还是收到重复的，邮件客户端能按它去重
+        msg["Message-ID"] = make_msgid(domain=cfg.from_addr.split("@")[-1] or "mercari-watch")
         msg.set_content(text, charset="utf-8")
         msg.add_alternative(html_body, subtype="html", charset="utf-8")
 
+        # 连接 / 登录阶段可以重试：这一步失败说明邮件根本没发出去，重试是安全的。
         last_error: Exception | None = None
+        server = None
         for attempt in range(3):
             try:
                 server = self._connect()
-                try:
-                    server.send_message(msg)
-                finally:
-                    try:
-                        server.quit()
-                    except Exception:  # noqa: BLE001
-                        pass
-                log.info("邮件已发送：%s -> %s", subject, ", ".join(cfg.to_addrs))
-                return
+                break
             except (smtplib.SMTPException, OSError, ssl.SSLError) as exc:
                 last_error = exc
-                log.warning("发信失败（第 %d 次）：%s", attempt + 1, exc)
+                log.warning("连接邮件服务器失败（第 %d 次）：%s", attempt + 1, exc)
                 time.sleep(3 * (attempt + 1))
-        raise NotifyError(f"邮件发送失败：{last_error}")
+        if server is None:
+            raise NotifyError(f"连接邮件服务器失败：{last_error}")
+
+        # 发送阶段只做一次，绝不重试。
+        # 原因：服务器可能已经收下邮件、只是在读回执时断线；重试就会导致同一封信发两遍
+        # （实测踩过：两封邮件连时间戳都一模一样）。
+        try:
+            server.send_message(msg)
+            log.info("邮件已发送：%s -> %s", subject, ", ".join(cfg.to_addrs))
+        except (smtplib.SMTPException, OSError, ssl.SSLError) as exc:
+            raise NotifyError(
+                f"发送中断：{exc}（邮件可能已经投递成功，为避免重复不再重试）"
+            ) from exc
+        finally:
+            try:
+                server.quit()
+            except Exception:  # noqa: BLE001
+                pass
